@@ -1,0 +1,34 @@
+/* 全局基础样式重置 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  font-size: 14px;
+  color: #333;
+  background-color: #f5f7fa; /* 浅灰色背景，适合后台系统 */
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* 清除列表默认样式 */
+ul, ol {
+  list-style: none;
+}
+
+/* 按钮基础重置 */
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+}
