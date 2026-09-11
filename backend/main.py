@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
@@ -10,11 +12,18 @@ from auth import (
     get_password_hash,
     verify_password,
 )
-from database import get_db
+from database import Base, engine, get_db
 from models import Task, User
 from schemas import TaskCreate, TaskOut, TaskUpdate, UserCreate, UserOut
 
-app = FastAPI(title="taskflow API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
+app = FastAPI(title="taskflow API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
