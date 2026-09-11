@@ -3,28 +3,16 @@ from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.orm import Session
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
-from database import get_db
+from database import get_db, settings
 from models import User
-
-
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
-
-    SECRET_KEY: str
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-
-
-settings = Settings()
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
