@@ -1,7 +1,7 @@
 import enum
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -11,6 +11,12 @@ class TaskStatus(str, enum.Enum):
     todo = "todo"
     doing = "doing"
     done = "done"
+
+
+class Priority(str, enum.Enum):
+    low = "low"
+    medium = "medium"
+    high = "high"
 
 
 class User(Base):
@@ -39,6 +45,11 @@ class Task(Base):
     status: Mapped[TaskStatus] = mapped_column(
         Enum(TaskStatus), default=TaskStatus.todo, nullable=False
     )
+    priority: Mapped[Priority] = mapped_column(
+        Enum(Priority), default=Priority.medium, nullable=False
+    )
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tags: Mapped[str | None] = mapped_column(String(255), nullable=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False

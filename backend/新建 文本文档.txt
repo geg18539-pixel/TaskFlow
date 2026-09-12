@@ -1,0 +1,4 @@
+venv\Scripts\activate
+
+:: 3. 启动 FastAPI 服务
+uvicorn main:app --reload --port 8000

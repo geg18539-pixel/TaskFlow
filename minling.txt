@@ -1,0 +1,38 @@
+
+在电脑开始菜单里找到 Docker Desktop，点击打开。
+
+等待它加载，直到左下角出现绿色的 Engine running 字样（这通常需要 10-30 秒）。
+
+确认右下角托盘区也有 Docker 的鲸鱼小图标。
+
+第二步：启动容器
+等 Docker Desktop 完全启动后，回到终端，执行：
+
+cmd
+cd /d F:\TaskFlow
+docker compose up -d
+⚠️ 极有可能出现的二次报错预警：端口冲突
+如果你执行 docker compose up -d 后再次报错 Bind for 0.0.0.0:3306 failed: port is already allocated，请立刻执行以下命令：
+
+cmd
+docker stop mysql8
+docker rm mysql8
+(这是因为你之前单独启动的旧 MySQL 容器还在后台占着 3306 端口，删掉它，再执行一次 docker compose up -d 即可。)
+
+第三步：验证并访问
+执行：
+
+cmd
+docker compose ps
+确保 taskflow-db、taskflow-backend、taskflow-frontend 三个都是 Up 状态。
+
+然后打开浏览器访问：http://localhost
+
+💡 最后的叮嘱
+你的项目现在已经完全容器化了。以后请记住这个原则：
+
+不要再去 backend 目录下敲 uvicorn。
+
+不要再去 frontend 目录下敲 pnpm run dev。
+
+你只需要启动 Docker Desktop，然后在根目录敲 docker compose up -d，所有服务（前端、后端、数据库）就全自动跑起来了。

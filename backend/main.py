@@ -1,9 +1,9 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -13,8 +13,8 @@ from auth import (
     verify_password,
 )
 from database import Base, engine, get_db
-from models import Task, User
-from schemas import TaskCreate, TaskOut, TaskUpdate, UserCreate, UserOut
+from models import Task, TaskStatus, User
+from schemas import TaskCreate, TaskOut, TaskPage, TaskUpdate, UserCreate, UserOut
 
 
 @asynccontextmanager
@@ -75,17 +75,34 @@ def read_current_user(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-@app.get("/api/tasks", response_model=list[TaskOut])
+@app.get("/api/tasks", response_model=TaskPage)
 def list_tasks(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    search: str | None = Query(default=None),
+    status_filter: TaskStatus | None = Query(default=None, alias="status"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> list[Task]:
+) -> dict:
+    conditions = [Task.owner_id == current_user.id]
+
+    if search:
+        conditions.append(Task.title.like(f"%{search}%"))
+    if status_filter is not None:
+        conditions.append(Task.status == status_filter)
+
+    total = db.scalar(select(func.count()).select_from(Task).where(*conditions)) or 0
+
     stmt = (
         select(Task)
-        .where(Task.owner_id == current_user.id)
+        .where(*conditions)
         .order_by(Task.created_at.desc())
+        .offset(skip)
+        .limit(limit)
     )
-    return list(db.scalars(stmt).all())
+    items = list(db.scalars(stmt).all())
+
+    return {"data": items, "total": total}
 
 
 @app.post("/api/tasks", response_model=TaskOut, status_code=status.HTTP_201_CREATED)

@@ -5,15 +5,27 @@ import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const MOBILE_WIDTH = 768
+const THEME_KEY = 'theme'
 
 const route = useRoute()
 const userStore = useUserStore()
 
 const isMobile = ref(false)
 const sidebarVisible = ref(true)
+const isDark = ref(localStorage.getItem(THEME_KEY) === 'dark')
 
 const activeMenu = computed(() => route.path)
 const username = computed(() => userStore.userInfo?.username || '未登录')
+
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', isDark.value)
+}
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  localStorage.setItem(THEME_KEY, isDark.value ? 'dark' : 'light')
+  applyTheme()
+}
 
 function syncViewport() {
   isMobile.value = window.innerWidth < MOBILE_WIDTH
@@ -21,6 +33,7 @@ function syncViewport() {
 }
 
 onMounted(() => {
+  applyTheme()
   syncViewport()
   window.addEventListener('resize', syncViewport)
   userStore.initUser()
@@ -58,6 +71,7 @@ function handleCommand(command: string) {
         class="layout-menu"
       >
         <el-menu-item index="/">任务管理</el-menu-item>
+        <el-menu-item index="/dashboard">数据概览</el-menu-item>
         <el-menu-item index="/profile">个人中心</el-menu-item>
       </el-menu>
     </el-aside>
@@ -69,6 +83,10 @@ function handleCommand(command: string) {
         </div>
 
         <div class="header-right">
+          <span class="theme-toggle" :title="isDark ? '切换到浅色' : '切换到深色'" @click="toggleTheme">
+            {{ isDark ? '☀' : '☾' }}
+          </span>
+
           <el-dropdown @command="handleCommand">
             <span class="user-trigger">
               {{ username }}
@@ -123,8 +141,8 @@ function handleCommand(command: string) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #ffffff;
-  border-bottom: 1px solid #e4e7ed;
+  background-color: var(--el-bg-color);
+  border-bottom: 1px solid var(--el-border-color-light);
 }
 
 .header-left {
@@ -132,11 +150,26 @@ function handleCommand(command: string) {
   align-items: center;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
 .hamburger {
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
   user-select: none;
+  color: var(--el-text-color-primary);
+}
+
+.theme-toggle {
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  color: var(--el-text-color-primary);
 }
 
 .user-trigger {
@@ -144,7 +177,7 @@ function handleCommand(command: string) {
   align-items: center;
   gap: 4px;
   cursor: pointer;
-  color: #303133;
+  color: var(--el-text-color-primary);
 }
 
 .user-trigger-arrow {
@@ -153,7 +186,7 @@ function handleCommand(command: string) {
 }
 
 .layout-main {
-  background-color: #f5f7fa;
+  background-color: var(--el-bg-color-page);
 }
 
 @media (max-width: 767px) {

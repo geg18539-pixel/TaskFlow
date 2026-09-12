@@ -52,7 +52,7 @@ export const useUserStore = defineStore('user', () => {
     form.append('username', username)
     form.append('password', password)
 
-    const { data } = await request.post('/login', form)
+    const { data } = await request.post('/login', form, { silent: true })
     setToken(data.access_token)
     await getUserInfo()
     return data
