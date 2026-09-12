@@ -1,0 +1,271 @@
+# =============================================================================
+# TaskFlow 的 Kubernetes 编排清单
+#
+# Pod / Deployment / Service 三者的关系:
+#
+#   Pod        是 K8s 里最小的调度单位, 一个 Pod 里跑一个或多个容器。
+#              Pod 的 IP 是临时的, 重建后会变, 所以不能直接用它通信。
+#   Deployment 是 Pod 的"管理者"。你声明期望的副本数 (replicas) 和容器模板,
+#              Deployment 负责创建 Pod、滚动更新 (rolling update)、并在 Pod
+#              挂掉时自动重建。日常不要直接创建 Pod, 而是通过 Deployment 管理。
+#   Service    是一组 Pod 的固定访问入口。它通过 selector 匹配 Pod 的 label,
+#              为这组随时会变的 Pod 提供一个稳定的 DNS 名和 ClusterIP。
+#              同一集群内其他 Pod 直接用服务名访问, 例如后端连数据库时写
+#              "mysql://...@db:3306" 中的 db 就是 Service 名。
+#
+#   完整链路: Service (稳定入口) -> 按 label 选中 -> Deployment 管的多个 Pod
+#
+# 部署前请先把前后端镜像推送到镜像仓库, 并替换下方 image 字段里的占位用户名。
+# =============================================================================
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: taskflow-secret
+  labels:
+    app: taskflow
+type: Opaque
+stringData:
+  MYSQL_ROOT_PASSWORD: "root1234"
+  SECRET_KEY: "change-me-in-production-7d3a9f1c6e8b2d4a5f0c9e7b3d1a8f6c2"
+---
+# -----------------------------------------------------------------------------
+# MySQL: 数据持久化卷 + Deployment + ClusterIP Service
+# -----------------------------------------------------------------------------
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-data
+  labels:
+    app: taskflow
+    tier: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db
+  labels:
+    app: taskflow
+    tier: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: taskflow
+      tier: database
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: taskflow
+        tier: database
+    spec:
+      containers:
+        - name: mysql
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+              name: mysql
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: MYSQL_DATABASE
+              value: taskflow
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+          readinessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["mysqladmin", "ping", "-h", "localhost"]
+            initialDelaySeconds: 45
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: mysql-data
+          persistentVolumeClaim:
+            claimName: mysql-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: taskflow
+    tier: database
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow
+    tier: database
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+# -----------------------------------------------------------------------------
+# Backend (FastAPI): Deployment + ClusterIP Service
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: taskflow
+    tier: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: taskflow
+      tier: backend
+  template:
+    metadata:
+      labels:
+        app: taskflow
+        tier: backend
+    spec:
+      containers:
+        - name: backend
+          image: your-dockerhub-username/taskflow-backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          env:
+            - name: DATABASE_URL
+              value: mysql+pymysql://root:root1234@db:3306/taskflow
+            - name: ALGORITHM
+              value: HS256
+            - name: ACCESS_TOKEN_EXPIRE_MINUTES
+              value: "1440"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: taskflow-secret
+                  key: SECRET_KEY
+          readinessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /docs
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app: taskflow
+    tier: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: taskflow
+    tier: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+# -----------------------------------------------------------------------------
+# Frontend (Nginx): Deployment + NodePort Service
+# -----------------------------------------------------------------------------
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    app: taskflow
+    tier: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: taskflow
+      tier: frontend
+  template:
+    metadata:
+      labels:
+        app: taskflow
+        tier: frontend
+    spec:
+      containers:
+        - name: frontend
+          image: your-dockerhub-username/taskflow-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    app: taskflow
+    tier: frontend
+spec:
+  type: NodePort
+  selector:
+    app: taskflow
+    tier: frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      nodePort: 30080
